@@ -1,0 +1,1375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mombasa Marine Supply - Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* Global Reset */
+        html, body {
+            height: 100%;
+            width: 100%;
+            margin: 0;
+            padding: 0;
+        }
+
+        /* Custom CSS for animations and transitions */
+        .sidebar {
+            transition: width 0.3s ease-in-out, left 0.3s ease-in-out; /* Added left for mobile overlay */
+        }
+        
+        /* Desktop specific sidebar states */
+        .sidebar-collapsed-desktop {
+            width: 4rem;
+        }
+        
+        .sidebar-expanded-desktop {
+            width: 16rem;
+        }
+        
+        /* Mobile specific sidebar states (overlay) */
+        .sidebar-mobile-overlay {
+            position: fixed;
+            top: 0;
+            bottom: 0;
+            left: 0;
+            width: 100%; /* Or a specific width like 80% if you want a sliver of content */
+            z-index: 50; /* Ensure it's above content and overlay */
+        }
+        
+        .sidebar-mobile-hidden {
+            left: -100%; /* Move completely off-screen */
+        }
+
+        .content-area {
+            transition: margin-left 0.5s ease-in-out; /* Only for desktop margin control */
+        }
+
+        /* Overlay for mobile when sidebar is open */
+        .mobile-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.5); /* Semi-transparent black */
+            z-index: 40; /* Below sidebar, above content */
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease-in-out, visibility 0.3s ease-in-out;
+        }
+
+        .mobile-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+        
+        .hamburger {
+            transition: transform 0.3s ease-in-out;
+            display: flex; /* Ensure lines are stacked */
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .hamburger-line {
+            transition: all 0.3s ease-in-out;
+            width: 1.5rem; /* Standard width for hamburger lines */
+            height: 0.125rem; /* Standard thickness */
+            background-color: white;
+            margin: 0.25rem 0; /* Space between lines */
+        }
+        
+        .hamburger.active .hamburger-line:nth-child(1) {
+            transform: translateY(0.375rem) rotate(45deg); /* Move down and rotate */
+        }
+        
+        .hamburger.active .hamburger-line:nth-child(2) {
+            opacity: 0;
+        }
+        
+        .hamburger.active .hamburger-line:nth-child(3) {
+            transform: translateY(-0.375rem) rotate(-45deg); /* Move up and rotate */
+        }
+        
+        .page-content {
+            animation: fadeIn 0.5s ease-in-out;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .nav-item {
+            transition: all 0.2s ease-in-out;
+        }
+        
+        .nav-item:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+        
+        .nav-item.active {
+            background-color: rgba(243, 156, 18, 0.2);
+            border-left: 4px solid #F39C12;
+        }
+        
+        .card {
+            transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+        }
+        
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        
+        .chart-container {
+            transition: all 0.3s ease-in-out;
+        }
+        
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 3px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+
+        /* --- Collapsed Sidebar Elements --- */
+        .sidebar-text-hidden {
+            opacity: 0;
+            visibility: hidden;
+            width: 0; /* Ensures text is not visually present in collapsed state */
+            margin-left: 0 !important; /* Override ml-3 for text */
+            transition: opacity 0.2s ease-in-out, visibility 0.2s ease-in-out, width 0.2s ease-in-out, margin-left 0.2s ease-in-out;
+        }
+
+        .sidebar-text-visible {
+            opacity: 1;
+            visibility: visible;
+            width: auto;
+            margin-left: 0.75rem !important; /* ml-3 from Tailwind */
+        }
+        
+        /* Search bar collapse */
+        .sidebar .search-wrapper.collapsed .search-input {
+            width: 0;
+            padding: 0;
+            visibility: hidden;
+            opacity: 0;
+            margin-left: 0;
+        }
+        .sidebar .search-wrapper .search-input {
+            transition: all 0.2s ease-in-out;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 font-sans">
+    <div class="flex h-screen overflow-hidden">
+        <!-- Sidebar -->
+        <div id="sidebar" class="sidebar bg-gray-800 text-white flex flex-col z-50">
+            <!-- Branding and Toggle -->
+            <div class="flex items-center justify-between p-4 border-b border-gray-700">
+                <div class="flex items-center space-x-2">
+                    <button id="sidebarToggle" class="hamburger focus:outline-none" aria-expanded="true" aria-controls="sidebar-nav">
+                        <div class="hamburger-line"></div>
+                        <div class="hamburger-line"></div>
+                        <div class="hamburger-line"></div>
+                    </button>
+                    <i class="fas fa-anchor text-yellow-500 text-xl"></i> <!-- Icon always visible -->
+                    <span id="brandText" class="text-xl font-bold">Mombasa Marine</span>
+                </div>
+            </div>
+            
+            <!-- Search Bar -->
+            <div class="p-4 border-b border-gray-700">
+                <div class="relative flex items-center search-wrapper">
+                    <input type="text" id="sidebarSearchInput" placeholder="Search..." 
+                           class="search-input w-full bg-gray-700 text-white px-4 py-2 pl-10 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500">
+                    <i id="sidebarSearchIcon" class="fas fa-search absolute left-3 text-gray-400"></i>
+                </div>
+            </div>
+            
+            <!-- Navigation Links -->
+            <nav id="sidebar-nav" class="flex-1 overflow-y-auto">
+                <ul class="space-y-1 p-2">
+                    <li>
+                        <a href="#" data-page="overview" class="nav-item active flex items-center p-3 rounded-lg">
+                            <i class="fas fa-chart-line w-6 text-center"></i>
+                            <span class="ml-3 sidebar-nav-text">Overview</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#" data-page="orders" class="nav-item flex items-center p-3 rounded-lg">
+                            <i class="fas fa-shopping-cart w-6 text-center"></i>
+                            <span class="ml-3 sidebar-nav-text">Orders</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#" data-page="inventory" class="nav-item flex items-center p-3 rounded-lg">
+                            <i class="fas fa-box w-6 text-center"></i>
+                            <span class="ml-3 sidebar-nav-text">Inventory</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#" data-page="customers" class="nav-item flex items-center p-3 rounded-lg">
+                            <i class="fas fa-users w-6 text-center"></i>
+                            <span class="ml-3 sidebar-nav-text">Customers</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#" data-page="settings" class="nav-item flex items-center p-3 rounded-lg">
+                            <i class="fas fa-cog w-6 text-center"></i>
+                            <span class="ml-3 sidebar-nav-text">Settings</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#" data-page="help" class="nav-item flex items-center p-3 rounded-lg">
+                            <i class="fas fa-question-circle w-6 text-center"></i>
+                            <span class="ml-3 sidebar-nav-text">Help Center</span>
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+            
+            <!-- User Profile -->
+            <div class="p-4 border-t border-gray-700">
+                <div class="flex items-center">
+                    <div class="relative flex-shrink-0">
+                        <img src="https://randomuser.me/api/portraits/men/32.jpg" alt="User" class="w-10 h-10 rounded-full">
+                        <span class="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-gray-800"></span>
+                    </div>
+                    <div id="userInfo" class="ml-3 flex-grow">
+                        <div class="font-medium">Captain Alex</div>
+                        <div class="text-sm text-gray-400">alex.smith@example.com</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Main Content Area -->
+        <div id="contentArea" class="content-area flex-1 overflow-y-auto">
+            <!-- Mobile Overlay -->
+            <div id="mobileOverlay" class="mobile-overlay" style="display: none;"></div>
+
+            <!-- Page content will be dynamically loaded here -->
+            <div id="pageContent" class="page-content p-6">
+                <!-- Default content (Overview page) will be loaded here by JS -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Data generators
+        const dataGenerators = {
+            dataVariance: 1, // Default variance for chart data
+            
+            getRandomInt: (min, max) => Math.floor(Math.random() * (max - min + 1)) + min,
+            
+            // Generate data that scales with dataVariance
+            generateChartData: function() {
+                const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
+                const revenue = months.map(() => this.getRandomInt(180 * this.dataVariance, 280 * this.dataVariance));
+                const costs = months.map(() => this.getRandomInt(120 * this.dataVariance, 190 * this.dataVariance));
+                const orders = months.map(() => this.getRandomInt(80 * this.dataVariance, 150 * this.dataVariance));
+                const targets = months.map(() => this.getRandomInt(90 * this.dataVariance, 140 * this.dataVariance));
+                
+                return {
+                    months,
+                    revenue,
+                    costs,
+                    orders,
+                    targets
+                };
+            },
+            
+            generateProductCategories: function() {
+                return [
+                    { name: 'Fresh Provisions', value: this.getRandomInt(200, 300), color: '#4BC0C0' },
+                    { name: 'Technical Supplies', value: this.getRandomInt(100, 200), color: '#36A2EB' },
+                    { name: 'Gas Refills', value: this.getRandomInt(50, 100), color: '#FFCE56' },
+                    { name: 'Laundry Services', value: this.getRandomInt(20, 50), color: '#FF6384' }
+                ];
+            },
+            
+            generateDeliveryLocations: function() {
+                return [
+                    { name: 'Container Terminal', value: this.getRandomInt(60, 80) },
+                    { name: 'Bulk Terminal', value: this.getRandomInt(20, 40) },
+                    { name: 'Cruise Terminal', value: this.getRandomInt(10, 20) },
+                    { name: 'Shipyard', value: this.getRandomInt(5, 15) },
+                    { name: 'Other', value: this.getRandomInt(1, 10) }
+                ];
+            },
+            
+            generateOrders: function(count = 15) { // Increased default count for better data
+                const statuses = ['Pending', 'In Progress', 'Delivered', 'Cancelled'];
+                const vessels = ['MV Horizon', 'MT Ocean Queen', 'SY Serenity', 'MV Maersk Alabama', 'MSC Napoli', 'CMA CGM Brazil', 'Ever Given', 'HMM Algeciras'];
+                
+                return Array.from({ length: count }, (_, i) => ({
+                    id: `ORD-${String(i + 1).padStart(3, '0')}`,
+                    vessel: vessels[this.getRandomInt(0, vessels.length - 1)],
+                    portDate: new Date(Date.now() - this.getRandomInt(0, 30) * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                    deliveryDate: new Date(Date.now() - this.getRandomInt(0, 28) * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                    status: statuses[this.getRandomInt(0, 3)],
+                    total: this.getRandomInt(20000, 250000) * this.dataVariance // Scale total
+                }));
+            },
+            
+            generateInventory: function() {
+                const categories = {
+                    'Fresh Provisions': [
+                        { name: 'Potatoes', unit: 'kg', price: 120 },
+                        { name: 'Beef Tenderloin', unit: 'kg', price: 850 },
+                        { name: 'Bananas', unit: 'bunch', price: 450 },
+                        { name: 'Tomatoes', unit: 'kg', price: 180 },
+                        { name: 'Onions', unit: 'kg', price: 100 }
+                    ],
+                    'Technical Supplies': [
+                        { name: 'Mooring Rope (50mm)', unit: 'meter', price: 350 },
+                        { name: 'Nav Light Bulb', unit: 'piece', price: 800 },
+                        { name: 'Engine Oil (15W-40)', unit: 'liter', price: 1200 },
+                        { name: 'Paint (Red)', unit: 'liter', price: 950 },
+                        { name: 'Wire Rope Clips', unit: 'piece', price: 150 }
+                    ],
+                    'Gas Refills': [
+                        { name: 'LPG Cylinder (13kg)', unit: 'unit', price: 2500 },
+                        { name: 'Oxygen Cylinder', unit: 'unit', price: 3200 },
+                        { name: 'Acetylene Cylinder', unit: 'unit', price: 3800 }
+                    ],
+                    'Laundry Supplies': [
+                        { name: 'Industrial Detergent', unit: 'liter', price: 1500 },
+                        { name: 'Fabric Softener', unit: 'liter', price: 1200 },
+                        { name: 'Bleach', unit: 'liter', price: 800 }
+                    ]
+                };
+                
+                const inventory = [];
+                let idCounter = 1;
+                
+                for (const [category, items] of Object.entries(categories)) {
+                    for (const item of items) {
+                        inventory.push({
+                            id: `${category.substring(0, 2).toUpperCase()}-${String(idCounter).padStart(3, '0')}`,
+                            name: item.name,
+                            category,
+                            unit: item.unit,
+                            price: item.price,
+                            quantity: this.getRandomInt(5, 1500),
+                            updated: new Date(Date.now() - this.getRandomInt(1, 30) * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+                        });
+                        idCounter++;
+                    }
+                }
+                
+                return inventory;
+            },
+            
+            generateCustomers: function(count = 8) {
+                const companies = ['Maersk Line', 'MSC', 'CMA CGM', 'Hapag-Lloyd', 'COSCO', 'Evergreen', 'HMM', 'ONE', 'Yang Ming', 'ZIM'];
+                const vessels = ['MV Horizon', 'MT Ocean Queen', 'SY Serenity', 'MV Maersk Alabama', 'MSC Napoli', 'CMA CGM Brazil', 'Ever Given', 'HMM Algeciras'];
+                const firstNames = ['Alex', 'John', 'Sarah', 'Emma', 'Michael', 'David', 'Lisa', 'James', 'Robert', 'Maria'];
+                const lastNames = ['Smith', 'Johnson', 'Williams', 'Brown', 'Jones', 'Miller', 'Davis', 'Garcia', 'Rodriguez', 'Wilson'];
+                
+                return Array.from({ length: count }, (_, i) => ({
+                    id: `CUST-${String(i + 1).padStart(3, '0')}`,
+                    name: companies[i % companies.length],
+                    vessel: vessels[this.getRandomInt(0, vessels.length - 1)],
+                    contact: `${firstNames[this.getRandomInt(0, firstNames.length - 1)]} ${lastNames[this.getRandomInt(0, lastNames.length - 1)]}`,
+                    phone: `+2547${this.getRandomInt(10, 99)}${this.getRandomInt(100000, 999999)}`,
+                    email: `contact${i + 1}@${companies[i % companies.length].toLowerCase().replace(/\s/g, '')}.com`,
+                    lastOrder: new Date(Date.now() - this.getRandomInt(1, 60) * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                    totalOrders: this.getRandomInt(5, 50)
+                }));
+            }
+        };
+        
+        // Chart management
+        const chartManager = {
+            charts: {},
+            
+            initCharts: function() {
+                // Ensure canvas elements are ready
+                const productCategoriesCtx = document.getElementById('productCategoriesChart')?.getContext('2d');
+                const financialCtx = document.getElementById('monthlyFinancialsChart')?.getContext('2d');
+                const lineCtx = document.getElementById('orderVolumeChart')?.getContext('2d');
+                const locationCtx = document.getElementById('deliveriesByLocationChart')?.getContext('2d');
+
+                if (!productCategoriesCtx || !financialCtx || !lineCtx || !locationCtx) {
+                    // console.warn("Chart canvases not found for initialization. Retrying...");
+                    // This might happen if the DOM hasn't fully updated yet. Use setTimeout(0) as a fallback.
+                    setTimeout(() => this.initCharts(), 0); 
+                    return;
+                }
+
+                // Generate data for charts
+                const productCategories = dataGenerators.generateProductCategories();
+                const chartData = dataGenerators.generateChartData();
+                const locations = dataGenerators.generateDeliveryLocations();
+
+                // Product Categories Donut Chart
+                this.charts.productCategories = new Chart(productCategoriesCtx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: productCategories.map(item => item.name),
+                        datasets: [{
+                            data: productCategories.map(item => item.value),
+                            backgroundColor: productCategories.map(item => item.color),
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false, // Allow charts to fill container
+                        plugins: {
+                            legend: {
+                                position: 'right',
+                            },
+                            title: {
+                                display: true,
+                                text: 'Top Product Categories',
+                                font: {
+                                    size: 16
+                                }
+                            }
+                        },
+                        animation: {
+                            animateScale: true,
+                            animateRotate: true
+                        }
+                    }
+                });
+                
+                // Monthly Financials Bar Chart
+                this.charts.monthlyFinancials = new Chart(financialCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: chartData.months,
+                        datasets: [
+                            {
+                                label: 'Revenue',
+                                data: chartData.revenue,
+                                backgroundColor: 'rgba(75, 192, 192, 0.7)',
+                                borderColor: 'rgba(75, 192, 192, 1)',
+                                borderWidth: 1
+                            },
+                            {
+                                label: 'Operating Costs',
+                                data: chartData.costs,
+                                backgroundColor: 'rgba(255, 99, 132, 0.7)',
+                                borderColor: 'rgba(255, 99, 132, 1)',
+                                borderWidth: 1
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false, // Allow charts to fill container
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                title: {
+                                    display: true,
+                                    text: 'KES (thousands)'
+                                }
+                            }
+                        },
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: 'Monthly Financials',
+                                font: {
+                                    size: 16
+                                }
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        return `${context.dataset.label}: KES ${context.raw}K`;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+                
+                // Order Volume Trend Line Chart
+                this.charts.orderVolume = new Chart(lineCtx, {
+                    type: 'line',
+                    data: {
+                        labels: chartData.months,
+                        datasets: [
+                            {
+                                label: 'Actual Orders',
+                                data: chartData.orders,
+                                borderColor: 'rgba(54, 162, 235, 1)',
+                                backgroundColor: 'rgba(54, 162, 235, 0.1)',
+                                borderWidth: 2,
+                                tension: 0.3,
+                                fill: true
+                            },
+                            {
+                                label: 'Target Orders',
+                                data: chartData.targets,
+                                borderColor: 'rgba(255, 206, 86, 1)',
+                                backgroundColor: 'rgba(255, 206, 86, 0.1)',
+                                borderWidth: 2,
+                                borderDash: [5, 5],
+                                tension: 0.3,
+                                fill: false
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false, // Allow charts to fill container
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                title: {
+                                    display: true,
+                                    text: 'Number of Orders'
+                                }
+                            }
+                        },
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: 'Order Volume Trend',
+                                font: {
+                                    size: 16
+                                }
+                            }
+                        }
+                    }
+                });
+                
+                // Deliveries by Location Bar Chart
+                this.charts.deliveriesByLocation = new Chart(locationCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: locations.map(item => item.name),
+                        datasets: [{
+                            label: 'Deliveries',
+                            data: locations.map(item => item.value),
+                            backgroundColor: [
+                                'rgba(153, 102, 255, 0.7)',
+                                'rgba(255, 159, 64, 0.7)',
+                                'rgba(75, 192, 192, 0.7)',
+                                'rgba(54, 162, 235, 0.7)',
+                                'rgba(255, 99, 132, 0.7)'
+                            ],
+                            borderColor: [
+                                'rgba(153, 102, 255, 1)',
+                                'rgba(255, 159, 64, 1)',
+                                'rgba(75, 192, 192, 1)',
+                                'rgba(54, 162, 235, 1)',
+                                'rgba(255, 99, 132, 1)'
+                            ],
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false, // Allow charts to fill container
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                title: {
+                                    display: true,
+                                    text: 'Number of Deliveries'
+                                }
+                            }
+                        },
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: 'Deliveries by Location',
+                                font: {
+                                    size: 16
+                                }
+                            },
+                            legend: {
+                                display: false
+                            }
+                        }
+                    }
+                });
+            },
+            
+            destroyCharts: function() {
+                Object.values(this.charts).forEach(chart => chart.destroy());
+                this.charts = {};
+            }
+        };
+        
+        // Page renderers
+        const pageRenderers = {
+            currentPage: 'overview',
+            currentFilter: { orders: '', inventory: '', customers: '' }, // For page-specific search filters
+
+            renderOverview: function() {
+                const totalOrders = dataGenerators.getRandomInt(100, 200) * dataGenerators.dataVariance;
+                const totalRevenue = dataGenerators.getRandomInt(1000000, 2000000) * dataGenerators.dataVariance;
+                const avgOrderValue = Math.round(totalRevenue / totalOrders);
+                const orderTrend = dataGenerators.getRandomInt(-15, 15);
+                const revenueTrend = dataGenerators.getRandomInt(-10, 20);
+                const avgTrend = dataGenerators.getRandomInt(-5, 10);
+                
+                return `
+                    <div class="mb-6">
+                        <h1 class="text-2xl font-bold text-gray-800">Dashboard Overview</h1>
+                        <p class="text-gray-600">Welcome back! Here's what's happening with your business today.</p>
+                        <div class="mt-2 text-sm text-gray-500 flex items-center">
+                            Data Variance for Demo (1-5): 
+                            <input type="number" id="dataVarianceInput" value="${dataGenerators.dataVariance}" min="1" max="5" 
+                                   class="ml-2 w-20 px-2 py-1 border rounded-md focus:outline-none focus:ring-1 focus:ring-yellow-500">
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+                        <!-- Total Orders Card -->
+                        <div class="card bg-white p-6 rounded-lg shadow">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <p class="text-gray-500 font-medium">Total Orders (Last 30 Days)</p>
+                                    <h2 class="text-3xl font-bold mt-2">${totalOrders}</h2>
+                                </div>
+                                <div class="flex items-center ${orderTrend >= 0 ? 'text-green-500' : 'text-red-500'}">
+                                    ${orderTrend >= 0 ? '<i class="fas fa-arrow-up mr-1"></i>' : '<i class="fas fa-arrow-down mr-1"></i>'}
+                                    <span>${Math.abs(orderTrend)}%</span>
+                                </div>
+                            </div>
+                            <div class="mt-4 pt-4 border-t border-gray-100">
+                                <p class="text-sm text-gray-500">vs. previous period</p>
+                            </div>
+                        </div>
+                        
+                        <!-- Total Revenue Card -->
+                        <div class="card bg-white p-6 rounded-lg shadow">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <p class="text-gray-500 font-medium">Total Revenue (Last 30 Days)</p>
+                                    <h2 class="text-3xl font-bold mt-2">KES ${totalRevenue.toLocaleString()}</h2>
+                                </div>
+                                <div class="flex items-center ${revenueTrend >= 0 ? 'text-green-500' : 'text-red-500'}">
+                                    ${revenueTrend >= 0 ? '<i class="fas fa-arrow-up mr-1"></i>' : '<i class="fas fa-arrow-down mr-1"></i>'}
+                                    <span>${Math.abs(revenueTrend)}%</span>
+                                </div>
+                            </div>
+                            <div class="mt-4 pt-4 border-t border-gray-100">
+                                <p class="text-sm text-gray-500">vs. previous period</p>
+                            </div>
+                        </div>
+                        
+                        <!-- Average Order Value Card -->
+                        <div class="card bg-white p-6 rounded-lg shadow">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <p class="text-gray-500 font-medium">Average Order Value</p>
+                                    <h2 class="text-3xl font-bold mt-2">KES ${avgOrderValue.toLocaleString()}</h2>
+                                </div>
+                                <div class="flex items-center ${avgTrend >= 0 ? 'text-green-500' : 'text-red-500'}">
+                                    ${avgTrend >= 0 ? '<i class="fas fa-arrow-up mr-1"></i>' : '<i class="fas fa-arrow-down mr-1"></i>'}
+                                    <span>${Math.abs(avgTrend)}%</span>
+                                </div>
+                            </div>
+                            <div class="mt-4 pt-4 border-t border-gray-100">
+                                <p class="text-sm text-gray-500">vs. previous period</p>
+                            </div>
+                        </div>
+                        
+                        <!-- Quick Action Card -->
+                        <div class="card bg-yellow-50 p-6 rounded-lg shadow border border-yellow-100 flex flex-col justify-between">
+                            <div>
+                                <p class="text-gray-700 font-medium">New Order Entry</p>
+                                <p class="text-sm text-gray-600 mt-1">Quickly create new orders or import vessel requirements.</p>
+                            </div>
+                            <button class="mt-4 bg-yellow-500 hover:bg-yellow-600 text-white font-medium py-2 px-4 rounded-lg transition duration-200">
+                                Create New Order
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                        <!-- Product Categories Chart -->
+                        <div class="card bg-white p-6 rounded-lg shadow">
+                            <canvas id="productCategoriesChart" height="300"></canvas>
+                        </div>
+                        
+                        <!-- Monthly Financials Chart -->
+                        <div class="card bg-white p-6 rounded-lg shadow">
+                            <canvas id="monthlyFinancialsChart" height="300"></canvas>
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <!-- Order Volume Chart -->
+                        <div class="card bg-white p-6 rounded-lg shadow">
+                            <canvas id="orderVolumeChart" height="300"></canvas>
+                        </div>
+                        
+                        <!-- Deliveries by Location Chart -->
+                        <div class="card bg-white p-6 rounded-lg shadow">
+                            <canvas id="deliveriesByLocationChart" height="300"></canvas>
+                        </div>
+                    </div>
+                `;
+            },
+            
+            renderOrders: function(filterText = '') {
+                let orders = dataGenerators.generateOrders(20); // Generate more orders for filtering
+                
+                if (filterText) {
+                    filterText = filterText.toLowerCase();
+                    orders = orders.filter(order => 
+                        order.id.toLowerCase().includes(filterText) ||
+                        order.vessel.toLowerCase().includes(filterText) ||
+                        order.status.toLowerCase().includes(filterText)
+                    );
+                }
+
+                return `
+                    <div class="mb-6">
+                        <div class="flex flex-col md:flex-row md:items-center md:justify-between">
+                            <div>
+                                <h1 class="text-2xl font-bold text-gray-800">Orders Management</h1>
+                                <p class="text-gray-600">View and manage all vessel supply orders</p>
+                            </div>
+                            <button class="mt-4 md:mt-0 bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded-lg transition duration-200">
+                                <i class="fas fa-plus mr-2"></i> Create New Order
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="card bg-white rounded-lg shadow mb-6">
+                        <div class="p-4 border-b border-gray-200">
+                            <div class="flex flex-col md:flex-row md:items-center md:space-x-4">
+                                <div class="flex-1 mb-4 md:mb-0">
+                                    <input type="text" id="orderSearchInput" placeholder="Search by Order ID or Vessel..." 
+                                           class="w-full bg-gray-100 border border-gray-200 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                           value="${filterText}">
+                                </div>
+                                <div class="flex space-x-2">
+                                    <select class="bg-gray-100 border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                        <option value="">All Statuses</option>
+                                        <option value="Pending">Pending</option>
+                                        <option value="In Progress">In Progress</option>
+                                        <option value="Delivered">Delivered</option>
+                                        <option value="Cancelled">Cancelled</option>
+                                    </select>
+                                    <input type="date" class="bg-gray-100 border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                    <input type="date" class="bg-gray-100 border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full divide-y divide-gray-200">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Order ID</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Vessel Name</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Port Call Date</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Delivery Date</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Value</th>
+                                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="bg-white divide-y divide-gray-200">
+                                    ${orders.map(order => `
+                                        <tr>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${order.id}</td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${order.vessel}</td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${order.portDate}</td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${order.deliveryDate}</td>
+                                            <td class="px-6 py-4 whitespace-nowrap">
+                                                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
+                                                    ${order.status === 'Delivered' ? 'bg-green-100 text-green-800' : 
+                                                      order.status === 'In Progress' ? 'bg-blue-100 text-blue-800' :
+                                                      order.status === 'Cancelled' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'}">
+                                                    ${order.status}
+                                                </span>
+                                            </td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">KES ${order.total.toLocaleString()}</td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                                <button class="text-blue-500 hover:text-blue-700 mr-3"><i class="fas fa-eye"></i></button>
+                                                <button class="text-yellow-500 hover:text-yellow-700 mr-3"><i class="fas fa-edit"></i></button>
+                                                <button class="text-red-500 hover:text-red-700"><i class="fas fa-trash"></i></button>
+                                            </td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                        
+                        <div class="p-4 border-t border-gray-200 flex items-center justify-between">
+                            <div class="text-sm text-gray-500">
+                                Showing <span class="font-medium">1</span> to <span class="font-medium">${orders.length > 10 ? 10 : orders.length}</span> of <span class="font-medium">${orders.length}</span> orders
+                            </div>
+                            <div class="flex space-x-2">
+                                <button class="px-3 py-1 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                                    Previous
+                                </button>
+                                <button class="px-3 py-1 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                                    Next
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            },
+            
+            renderInventory: function(filterText = '') {
+                let inventory = dataGenerators.generateInventory();
+                
+                if (filterText) {
+                    filterText = filterText.toLowerCase();
+                    inventory = inventory.filter(item => 
+                        item.id.toLowerCase().includes(filterText) ||
+                        item.name.toLowerCase().includes(filterText) ||
+                        item.category.toLowerCase().includes(filterText)
+                    );
+                }
+
+                return `
+                    <div class="mb-6">
+                        <div class="flex flex-col md:flex-row md:items-center md:justify-between">
+                            <div>
+                                <h1 class="text-2xl font-bold text-gray-800">Inventory Management</h1>
+                                <p class="text-gray-600">Track and manage all products in stock</p>
+                            </div>
+                            <button class="mt-4 md:mt-0 bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded-lg transition duration-200">
+                                <i class="fas fa-plus mr-2"></i> Add New Product
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="card bg-white rounded-lg shadow mb-6">
+                        <div class="p-4 border-b border-gray-200">
+                            <div class="flex flex-col md:flex-row md:items-center md:space-x-4">
+                                <div class="flex-1 mb-4 md:mb-0">
+                                    <input type="text" id="inventorySearchInput" placeholder="Search by product name or code..." 
+                                           class="w-full bg-gray-100 border border-gray-200 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                           value="${filterText}">
+                                </div>
+                                <div class="flex space-x-2">
+                                    <select class="bg-gray-100 border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                        <option value="">All Categories</option>
+                                        <option value="Fresh Provisions">Fresh Provisions</option>
+                                        <option value="Technical Supplies">Technical Supplies</option>
+                                        <option value="Gas Refills">Gas Refills</option>
+                                        <option value="Laundry Supplies">Laundry Supplies</option>
+                                    </select>
+                                    <select class="bg-gray-100 border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                        <option value="">All Availability</option>
+                                        <option value="In Stock">In Stock</option>
+                                        <option value="Low Stock">Low Stock</option>
+                                        <option value="Out of Stock">Out of Stock</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full divide-y divide-gray-200">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stock Code</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item Name</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Unit</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Unit Price (KES)</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quantity</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Updated</th>
+                                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="bg-white divide-y divide-gray-200">
+                                    ${inventory.map(item => `
+                                        <tr>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${item.id}</td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${item.name}</td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${item.category}</td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${item.unit}</td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${item.price.toLocaleString()}</td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium 
+                                                ${item.quantity === 0 ? 'text-red-500' : item.quantity < 10 ? 'text-yellow-500' : 'text-green-500'}">
+                                                ${item.quantity.toLocaleString()}
+                                            </td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${item.updated}</td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                                <button class="text-blue-500 hover:text-blue-700 mr-3"><i class="fas fa-eye"></i></button>
+                                                <button class="text-yellow-500 hover:text-yellow-700 mr-3"><i class="fas fa-edit"></i></button>
+                                                <button class="text-green-500 hover:text-green-700 mr-3"><i class="fas fa-arrow-up"></i></button>
+                                                <button class="text-red-500 hover:text-red-700"><i class="fas fa-trash"></i></button>
+                                            </td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                        
+                        <div class="p-4 border-t border-gray-200 flex items-center justify-between">
+                            <div class="text-sm text-gray-500">
+                                Showing <span class="font-medium">1</span> to <span class="font-medium">${inventory.length > 10 ? 10 : inventory.length}</span> of <span class="font-medium">${inventory.length}</span> products
+                            </div>
+                            <div class="flex space-x-2">
+                                <button class="px-3 py-1 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                                    Previous
+                                </button>
+                                <button class="px-3 py-1 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                                    Next
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            },
+            
+            renderCustomers: function(filterText = '') {
+                let customers = dataGenerators.generateCustomers();
+                
+                if (filterText) {
+                    filterText = filterText.toLowerCase();
+                    customers = customers.filter(customer => 
+                        customer.id.toLowerCase().includes(filterText) ||
+                        customer.name.toLowerCase().includes(filterText) ||
+                        customer.vessel.toLowerCase().includes(filterText) ||
+                        customer.contact.toLowerCase().includes(filterText)
+                    );
+                }
+
+                return `
+                    <div class="mb-6">
+                        <div class="flex flex-col md:flex-row md:items-center md:justify-between">
+                            <div>
+                                <h1 class="text-2xl font-bold text-gray-800">Customers Management</h1>
+                                <p class="text-gray-600">View and manage all customer accounts</p>
+                            </div>
+                            <button class="mt-4 md:mt-0 bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded-lg transition duration-200">
+                                <i class="fas fa-plus mr-2"></i> Add New Customer
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="card bg-white rounded-lg shadow mb-6">
+                        <div class="p-4 border-b border-gray-200">
+                            <div class="flex flex-col md:flex-row md:items-center md:space-x-4">
+                                <div class="flex-1 mb-4 md:mb-0">
+                                    <input type="text" id="customerSearchInput" placeholder="Search by customer or vessel name..." 
+                                           class="w-full bg-gray-100 border border-gray-200 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                           value="${filterText}">
+                                </div>
+                                <div class="flex space-x-2">
+                                    <input type="text" placeholder="Contact person..." 
+                                           class="bg-gray-100 border border-gray-200 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full divide-y divide-gray-200">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Customer Name</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Primary Vessel</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contact Person</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Phone</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Order</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Orders</th>
+                                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="bg-white divide-y divide-gray-200">
+                                    ${customers.map(customer => `
+                                        <tr>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${customer.name}</td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${customer.vessel}</td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${customer.contact}</td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${customer.phone}</td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${customer.email}</td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${customer.lastOrder}</td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${customer.totalOrders}</td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                                <button class="text-blue-500 hover:text-blue-700 mr-3"><i class="fas fa-eye"></i></button>
+                                                <button class="text-yellow-500 hover:text-yellow-700 mr-3"><i class="fas fa-edit"></i></button>
+                                                <button class="text-green-500 hover:text-green-700"><i class="fas fa-shopping-cart"></i></button>
+                                            </td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                        
+                        <div class="p-4 border-t border-gray-200 flex items-center justify-between">
+                            <div class="text-sm text-gray-500">
+                                Showing <span class="font-medium">1</span> to <span class="font-medium">${customers.length > 10 ? 10 : customers.length}</span> of <span class="font-medium">${customers.length}</span> customers
+                            </div>
+                            <div class="flex space-x-2">
+                                <button class="px-3 py-1 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                                    Previous
+                                </button>
+                                <button class="px-3 py-1 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                                    Next
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            },
+            
+            renderSettings: function() {
+                return `
+                    <div class="mb-6">
+                        <h1 class="text-2xl font-bold text-gray-800">Settings</h1>
+                        <p class="text-gray-600">Configure your account and system preferences</p>
+                    </div>
+                    
+                    <div class="card bg-white p-6 rounded-lg shadow">
+                        <div class="text-center py-12">
+                            <i class="fas fa-cog text-5xl text-gray-300 mb-4"></i>
+                            <h3 class="text-xl font-medium text-gray-700">Settings Dashboard</h3>
+                            <p class="text-gray-500 mt-2">This section is under development and will be available soon.</p>
+                        </div>
+                    </div>
+                `;
+            },
+            
+            renderHelp: function() {
+                return `
+                    <div class="mb-6">
+                        <h1 class="text-2xl font-bold text-gray-800">Help Center</h1>
+                        <p class="text-gray-600">Find answers to your questions and get support</p>
+                    </div>
+                    
+                    <div class="card bg-white p-6 rounded-lg shadow">
+                        <div class="text-center py-12">
+                            <i class="fas fa-question-circle text-5xl text-gray-300 mb-4"></i>
+                            <h3 class="text-xl font-medium text-gray-700">Help Center</h3>
+                            <p class="text-gray-500 mt-2">This section is under development and will be available soon.</p>
+                        </div>
+                    </div>
+                `;
+            },
+            
+            loadPage: function(page, filterText = '') {
+                this.currentPage = page;
+                
+                // Update active nav item
+                document.querySelectorAll('.nav-item').forEach(item => {
+                    item.classList.remove('active');
+                    if (item.getAttribute('data-page') === page) {
+                        item.classList.add('active');
+                    }
+                });
+                
+                // Destroy existing charts before loading new page content
+                chartManager.destroyCharts();
+                
+                // Load page content
+                let content = '';
+                switch (page) {
+                    case 'overview':
+                        content = this.renderOverview();
+                        break;
+                    case 'orders':
+                        this.currentFilter.orders = filterText; // Store filter
+                        content = this.renderOrders(filterText);
+                        break;
+                    case 'inventory':
+                        this.currentFilter.inventory = filterText; // Store filter
+                        content = this.renderInventory(filterText);
+                        break;
+                    case 'customers':
+                        this.currentFilter.customers = filterText; // Store filter
+                        content = this.renderCustomers(filterText);
+                        break;
+                    case 'settings':
+                        content = this.renderSettings();
+                        break;
+                    case 'help':
+                        content = this.renderHelp();
+                        break;
+                    default:
+                        content = this.renderOverview();
+                }
+                
+                const pageContentDiv = document.getElementById('pageContent');
+                pageContentDiv.innerHTML = content;
+                pageContentDiv.classList.remove('page-content'); // Remove to re-trigger animation
+                void pageContentDiv.offsetWidth; // Trigger reflow
+                pageContentDiv.classList.add('page-content'); // Re-add for animation
+
+                // Bind search input listeners after content is rendered
+                this.bindPageSpecificSearchListeners(page);
+                
+                // Initialize charts if on overview page
+                if (page === 'overview') {
+                    // Re-bind data variance input listener
+                    const dataVarianceInput = document.getElementById('dataVarianceInput');
+                    if (dataVarianceInput) {
+                        dataVarianceInput.addEventListener('input', (e) => {
+                            let value = parseInt(e.target.value);
+                            if (isNaN(value) || value < 1) value = 1;
+                            if (value > 5) value = 5; // Cap at 5 as per prompt
+                            e.target.value = value;
+                            dataGenerators.dataVariance = value;
+                            chartManager.destroyCharts(); // Destroy old charts before recreating
+                            chartManager.initCharts(); // Re-init with new variance
+                        });
+                    }
+                    chartManager.initCharts(); // Initial chart init for overview
+                }
+            },
+
+            bindPageSpecificSearchListeners: function(page) {
+                let searchInput;
+                let renderFunction;
+                let filterKey;
+
+                switch(page) {
+                    case 'orders':
+                        searchInput = document.getElementById('orderSearchInput');
+                        renderFunction = this.renderOrders;
+                        filterKey = 'orders';
+                        break;
+                    case 'inventory':
+                        searchInput = document.getElementById('inventorySearchInput');
+                        renderFunction = this.renderInventory;
+                        filterKey = 'inventory';
+                        break;
+                    case 'customers':
+                        searchInput = document.getElementById('customerSearchInput');
+                        renderFunction = this.renderCustomers;
+                        filterKey = 'customers';
+                        break;
+                    default:
+                        return; // No page-specific search for other pages
+                }
+
+                if (searchInput) {
+                    // Update input value from currentFilter when navigating back to page
+                    searchInput.value = this.currentFilter[filterKey]; 
+
+                    searchInput.addEventListener('input', (e) => {
+                        this.currentFilter[filterKey] = e.target.value; // Update stored filter
+                        const pageContentDiv = document.getElementById('pageContent');
+                        pageContentDiv.innerHTML = renderFunction(e.target.value); // Re-render with filter
+                        pageContentDiv.classList.remove('page-content'); // Re-trigger animation
+                        void pageContentDiv.offsetWidth;
+                        pageContentDiv.classList.add('page-content');
+                        // No need to destroy charts as these pages don't have charts
+                    });
+                }
+            }
+        };
+        
+        // Sidebar management
+        const sidebarManager = {
+            isExpanded: true, // Default state for desktop
+            isMobile: window.innerWidth < 768,
+            
+            toggleSidebar: function() {
+                this.isExpanded = !this.isExpanded;
+                
+                const sidebar = document.getElementById('sidebar');
+                const contentArea = document.getElementById('contentArea');
+                const toggleBtn = document.getElementById('sidebarToggle');
+                const brandText = document.getElementById('brandText');
+                const navItemTexts = document.querySelectorAll('.sidebar-nav-text');
+                const userInfoDiv = document.getElementById('userInfo');
+                const sidebarSearchWrapper = document.querySelector('.search-wrapper');
+                const mobileOverlay = document.getElementById('mobileOverlay');
+
+                // Hamburger icon animation
+                toggleBtn.classList.toggle('active', this.isExpanded);
+
+                if (this.isMobile) {
+                    // Mobile: Sidebar acts as overlay
+                    if (this.isExpanded) {
+                        sidebar.classList.remove('sidebar-mobile-hidden');
+                        sidebar.classList.add('sidebar-mobile-overlay');
+                        mobileOverlay.style.display = 'block'; // Show overlay
+                        setTimeout(() => mobileOverlay.classList.add('active'), 0); // Animate opacity
+                    } else {
+                        sidebar.classList.remove('sidebar-mobile-overlay');
+                        sidebar.classList.add('sidebar-mobile-hidden');
+                        mobileOverlay.classList.remove('active'); // Animate opacity
+                        setTimeout(() => mobileOverlay.style.display = 'none', 300); // Hide after transition
+                    }
+                    contentArea.style.marginLeft = '0'; // Content area always at 0 on mobile
+                } else {
+                    // Desktop: Sidebar controls content margin
+                    if (this.isExpanded) {
+                        sidebar.classList.remove('sidebar-collapsed-desktop');
+                        sidebar.classList.add('sidebar-expanded-desktop');
+                        contentArea.style.marginLeft = '16rem';
+                    } else {
+                        sidebar.classList.remove('sidebar-expanded-desktop');
+                        sidebar.classList.add('sidebar-collapsed-desktop');
+                        contentArea.style.marginLeft = '4rem';
+                    }
+                    // Hide/Show search input field
+                    sidebarSearchWrapper.classList.toggle('collapsed', !this.isExpanded);
+                }
+                
+                // Common toggle actions (text visibility)
+                navItemTexts.forEach(span => {
+                    span.classList.toggle('sidebar-text-hidden', !this.isExpanded);
+                    span.classList.toggle('sidebar-text-visible', this.isExpanded);
+                });
+
+                brandText.classList.toggle('sidebar-text-hidden', !this.isExpanded);
+                brandText.classList.toggle('sidebar-text-visible', this.isExpanded);
+                userInfoDiv.classList.toggle('sidebar-text-hidden', !this.isExpanded);
+                userInfoDiv.classList.toggle('sidebar-text-visible', this.isExpanded);
+
+                // Update ARIA attribute
+                toggleBtn.setAttribute('aria-expanded', this.isExpanded.toString());
+            },
+            
+            initResponsiveBehavior: function() {
+                const sidebar = document.getElementById('sidebar');
+                const contentArea = document.getElementById('contentArea');
+                const brandText = document.getElementById('brandText');
+                const navItemTexts = document.querySelectorAll('.sidebar-nav-text');
+                const userInfoDiv = document.getElementById('userInfo');
+                const sidebarSearchWrapper = document.querySelector('.search-wrapper');
+                const mobileOverlay = document.getElementById('mobileOverlay');
+                const toggleBtn = document.getElementById('sidebarToggle');
+                
+                const applyDesktopStyles = () => {
+                    this.isMobile = false;
+                    sidebar.classList.remove('sidebar-mobile-overlay', 'sidebar-mobile-hidden');
+                    mobileOverlay.classList.remove('active');
+                    mobileOverlay.style.display = 'none';
+
+                    if (this.isExpanded) {
+                        sidebar.classList.add('sidebar-expanded-desktop');
+                        sidebar.classList.remove('sidebar-collapsed-desktop');
+                        contentArea.style.marginLeft = '16rem';
+                    } else { // Handle scenario where it was collapsed on mobile, and now resize to desktop
+                        sidebar.classList.add('sidebar-collapsed-desktop');
+                        sidebar.classList.remove('sidebar-expanded-desktop');
+                        contentArea.style.marginLeft = '4rem';
+                    }
+                    sidebarSearchWrapper.classList.toggle('collapsed', !this.isExpanded);
+                    
+                    navItemTexts.forEach(span => {
+                        span.classList.toggle('sidebar-text-hidden', !this.isExpanded);
+                        span.classList.toggle('sidebar-text-visible', this.isExpanded);
+                    });
+                    brandText.classList.toggle('sidebar-text-hidden', !this.isExpanded);
+                    brandText.classList.toggle('sidebar-text-visible', this.isExpanded);
+                    userInfoDiv.classList.toggle('sidebar-text-hidden', !this.isExpanded);
+                    userInfoDiv.classList.toggle('sidebar-text-visible', this.isExpanded);
+                };
+
+                const applyMobileStyles = () => {
+                    this.isMobile = true;
+                    this.isExpanded = false; // Always start collapsed on mobile
+                    sidebar.classList.remove('sidebar-expanded-desktop', 'sidebar-collapsed-desktop', 'sidebar-mobile-overlay');
+                    sidebar.classList.add('sidebar-mobile-hidden');
+                    contentArea.style.marginLeft = '0'; // Content area never has margin on mobile
+                    mobileOverlay.classList.remove('active');
+                    mobileOverlay.style.display = 'none';
+                    
+                    // Force collapsed state visuals for mobile
+                    navItemTexts.forEach(span => {
+                        span.classList.add('sidebar-text-hidden');
+                        span.classList.remove('sidebar-text-visible');
+                    });
+                    brandText.classList.add('sidebar-text-hidden');
+                    brandText.classList.remove('sidebar-text-visible');
+                    userInfoDiv.classList.add('sidebar-text-hidden');
+                    userInfoDiv.classList.remove('sidebar-text-visible');
+                    sidebarSearchWrapper.classList.add('collapsed');
+                    toggleBtn.classList.remove('active'); // Ensure hamburger is active
+
+                    // Reset ARIA attribute for initial mobile state
+                    toggleBtn.setAttribute('aria-expanded', 'false');
+                };
+
+                // Initial load
+                if (window.innerWidth < 768) {
+                    applyMobileStyles();
+                } else {
+                    applyDesktopStyles();
+                    this.isExpanded = true; // Ensure expanded on desktop by default
+                    toggleBtn.classList.add('active'); // Hamburger is 'active' for expanded state
+                }
+                
+                // Add event listener for window resize
+                window.addEventListener('resize', () => {
+                    if (window.innerWidth < 768 && !this.isMobile) {
+                        applyMobileStyles();
+                    } else if (window.innerWidth >= 768 && this.isMobile) {
+                        applyDesktopStyles();
+                    }
+                });
+
+                // Close sidebar on mobile overlay click
+                mobileOverlay.addEventListener('click', () => {
+                    if (this.isMobile && this.isExpanded) {
+                        this.toggleSidebar();
+                    }
+                });
+            }
+        };
+        
+        // Initialize the application
+        document.addEventListener('DOMContentLoaded', () => {
+            // Initialize sidebar
+            sidebarManager.initResponsiveBehavior();
+            
+            // Set up sidebar toggle
+            document.getElementById('sidebarToggle').addEventListener('click', () => {
+                sidebarManager.toggleSidebar();
+            });
+            
+            // Set up navigation links
+            document.querySelectorAll('[data-page]').forEach(link => {
+                link.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    const page = link.getAttribute('data-page');
+                    pageRenderers.loadPage(page);
+                    // Close sidebar on mobile after clicking a link
+                    if (sidebarManager.isMobile && sidebarManager.isExpanded) {
+                        sidebarManager.toggleSidebar();
+                    }
+                });
+            });
+
+            // Set up global search input listener in sidebar
+            const globalSearchInput = document.getElementById('sidebarSearchInput');
+            if (globalSearchInput) {
+                globalSearchInput.addEventListener('input', (e) => {
+                    const filterText = e.target.value;
+                    const currentPage = pageRenderers.currentPage;
+                    pageRenderers.loadPage(currentPage, filterText); // Reload current page with filter
+                });
+            }
+            
+            // Load default page
+            pageRenderers.loadPage('overview');
+        });
+    </script>
+</body>
+</html>
